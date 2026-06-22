@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crystal Forest — Adventure</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0d14;
+    overflow: hidden;
+    font-family: 'Crimson Pro', serif;
+    color: #e8dcc8;
+  }
+
+  #canvas { display: block; width: 100vw; height: 100vh; }
+
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #top-bar {
+    position: absolute;
+    top: 24px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(5,10,20,0.72);
+    border: 1px solid rgba(120,200,255,0.18);
+    border-radius: 40px;
+    padding: 10px 28px;
+    backdrop-filter: blur(8px);
+  }
+
+  #title-text {
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: #a0d4ff;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+
+  #crystal-counter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .crystal-gem {
+    width: 18px; height: 18px;
+    position: relative;
+    transition: all 0.4s ease;
+  }
+
+  .crystal-gem svg { width: 100%; height: 100%; }
+
+  .crystal-gem.collected svg { filter: drop-shadow(0 0 6px #7df9ff); }
+  .crystal-gem.collected .gem-fill { fill: #7df9ff; }
+  .crystal-gem:not(.collected) .gem-fill { fill: rgba(100,180,220,0.2); }
+  .crystal-gem:not(.collected) .gem-stroke { stroke: rgba(100,180,220,0.4); }
+
+  #score-label {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    color: #7df9ff;
+    letter-spacing: 1px;
+  }
+
+  #controls-hint {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    background: rgba(5,10,20,0.65);
+    border: 1px solid rgba(120,200,255,0.12);
+    border-radius: 12px;
+    padding: 10px 24px;
+    backdrop-filter: blur(6px);
+    font-size: 13px;
+    color: rgba(200,220,255,0.6);
+    letter-spacing: 0.5px;
+  }
+
+  .ctrl { display: flex; align-items: center; gap: 6px; }
+  .key {
+    background: rgba(120,200,255,0.1);
+    border: 1px solid rgba(120,200,255,0.3);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    color: #a0d4ff;
+  }
+
+  #compass {
+    position: absolute;
+    top: 24px; right: 32px;
+    width: 56px; height: 56px;
+    background: rgba(5,10,20,0.7);
+    border: 1px solid rgba(120,200,255,0.2);
+    border-radius: 50%;
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  #compass-needle {
+    width: 2px; height: 28px;
+    background: linear-gradient(to bottom, #ff4d4d 50%, #a0d4ff 50%);
+    border-radius: 1px;
+    transform-origin: center center;
+    transition: transform 0.15s ease;
+  }
+
+  #collect-flash {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at center, rgba(125,249,255,0.18) 0%, transparent 70%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+  }
+
+  #collect-msg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Cinzel', serif;
+    font-size: 22px;
+    color: #7df9ff;
+    letter-spacing: 4px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    text-shadow: 0 0 20px rgba(125,249,255,0.8);
+    transition: opacity 0.3s ease;
+  }
+
+  #overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(2,5,12,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    gap: 0;
+  }
+
+  #overlay .rune-ring {
+    width: 120px; height: 120px;
+    border: 1.5px solid rgba(125,249,255,0.3);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 32px;
+    position: relative;
+    animation: spin-slow 12s linear infinite;
+  }
+
+  @keyframes spin-slow {
+    to { transform: rotate(360deg); }
+  }
+
+  .rune-ring::before {
+    content: '';
+    position: absolute;
+    width: 90px; height: 90px;
+    border: 1px dashed rgba(125,249,255,0.2);
+    border-radius: 50%;
+    animation: spin-slow 8s linear infinite reverse;
+  }
+
+  #overlay h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 42px;
+    font-weight: 900;
+    color: #c8eeff;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-shadow: 0 0 40px rgba(125,249,255,0.4);
+  }
+
+  #overlay .subtitle {
+    font-size: 18px;
+    color: rgba(180,220,255,0.6);
+    letter-spacing: 2px;
+    margin-bottom: 48px;
+    font-style: italic;
+  }
+
+  #overlay .lore {
+    max-width: 420px;
+    text-align: center;
+    font-size: 15px;
+    color: rgba(200,220,255,0.5);
+    line-height: 1.7;
+    margin-bottom: 48px;
+    font-style: italic;
+  }
+
+  #start-btn {
+    font-family: 'Cinzel', serif;
+    font-size: 15px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0a0d14;
+    background: #7df9ff;
+    border: none;
+    border-radius: 4px;
+    padding: 14px 48px;
+    cursor: pointer;
+    pointer-events: all;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 30px rgba(125,249,255,0.4);
+  }
+
+  #start-btn:hover {
+    background: #a0ffff;
+    box-shadow: 0 0 50px rgba(125,249,255,0.7);
+    transform: translateY(-2px);
+  }
+
+  #win-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(2,5,12,0.9);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    gap: 20px;
+  }
+
+  #win-overlay h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 52px;
+    font-weight: 900;
+    color: #ffd700;
+    letter-spacing: 6px;
+    text-shadow: 0 0 60px rgba(255,215,0,0.6);
+    animation: pulse-gold 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-gold {
+    0%,100% { text-shadow: 0 0 40px rgba(255,215,0,0.4); }
+    50% { text-shadow: 0 0 80px rgba(255,215,0,0.9); }
+  }
+
+  #win-overlay p {
+    font-size: 18px;
+    color: rgba(255,240,180,0.7);
+    letter-spacing: 2px;
+    font-style: italic;
+  }
+
+  #play-again-btn {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #0a0d14;
+    background: #ffd700;
+    border: none;
+    border-radius: 4px;
+    padding: 12px 40px;
+    cursor: pointer;
+    pointer-events: all;
+    transition: all 0.2s;
+    margin-top: 20px;
+    box-shadow: 0 0 30px rgba(255,215,0,0.4);
+  }
+
+  #play-again-btn:hover {
+    background: #ffe84d;
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px rgba(255,215,0,0.7);
+  }
+
+  #proximity-indicator {
+    position: absolute;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    color: #7df9ff;
+    letter-spacing: 2px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    text-shadow: 0 0 10px rgba(125,249,255,0.6);
+    pointer-events: none;
+  }
+
+  #minimap {
+    position: absolute;
+    bottom: 30px;
+    right: 32px;
+    width: 100px;
+    height: 100px;
+    background: rgba(5,10,20,0.7);
+    border: 1px solid rgba(120,200,255,0.2);
+    border-radius: 8px;
+    backdrop-filter: blur(6px);
+    overflow: hidden;
+  }
+
+  #minimap canvas { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <div id="top-bar">
+    <div id="title-text">Crystal Forest</div>
+    <div style="width:1px;height:16px;background:rgba(120,200,255,0.2)"></div>
+    <div id="crystal-counter"></div>
+    <div style="width:1px;height:16px;background:rgba(120,200,255,0.2)"></div>
+    <div id="score-label">0 / 5</div>
+  </div>
+
+  <div id="compass">
+    <div id="compass-needle"></div>
+  </div>
+
+  <div id="collect-flash"></div>
+  <div id="collect-msg">✦ CRYSTAL FOUND ✦</div>
+  <div id="proximity-indicator">⬆ Crystal nearby — move closer</div>
+
+  <div id="minimap"><canvas id="minimap-canvas" width="100" height="100"></canvas></div>
+
+  <div id="controls-hint">
+    <div class="ctrl"><span class="key">↑ ↓</span> Move</div>
+    <div class="ctrl"><span class="key">← →</span> Rotate</div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="rune-ring">
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      <polygon points="30,5 55,50 5,50" fill="none" stroke="rgba(125,249,255,0.6)" stroke-width="1.5"/>
+      <circle cx="30" cy="30" r="12" fill="rgba(125,249,255,0.08)" stroke="rgba(125,249,255,0.4)" stroke-width="1"/>
+    </svg>
+  </div>
+  <h1>Crystal Forest</h1>
+  <div class="subtitle">An Enchanted Adventure</div>
+  <div class="lore">
+    Five ancient crystals lie scattered through the enchanted forest.<br>
+    The forest shifts and breathes around you — trust your senses,<br>
+    follow the glow, and claim what was lost to the ages.
+  </div>
+  <button id="start-btn" onclick="startGame()">Begin Quest</button>
+</div>
+
+<div id="win-overlay">
+  <div style="font-size:64px;margin-bottom:16px;">✦</div>
+  <h2>Quest Complete!</h2>
+  <p>All five crystals have been reclaimed from the forest.</p>
+  <p id="win-time" style="font-size:14px;color:rgba(255,240,180,0.5);letter-spacing:1px;"></p>
+  <button id="play-again-btn" onclick="resetGame()">Play Again</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── Scene Setup ─────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x050a14);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a1428, 0.028);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 2.2, 0);
+
+// ── Lighting ─────────────────────────────────────────────────
+const ambient = new THREE.AmbientLight(0x0d1f3c, 1.2);
+scene.add(ambient);
+
+const moonLight = new THREE.DirectionalLight(0x4488cc, 1.0);
+moonLight.position.set(-30, 60, -20);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.far = 150;
+moonLight.shadow.camera.left = -60;
+moonLight.shadow.camera.right = 60;
+moonLight.shadow.camera.top = 60;
+moonLight.shadow.camera.bottom = -60;
+scene.add(moonLight);
+
+// Rim light
+const rimLight = new THREE.DirectionalLight(0x2244aa, 0.4);
+rimLight.position.set(20, 10, 30);
+scene.add(rimLight);
+
+// ── Ground ────────────────────────────────────────────────────
+const groundGeo = new THREE.PlaneGeometry(120, 120, 30, 30);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x0d1a0d,
+  roughness: 0.95,
+  metalness: 0.0,
+});
+
+// Displace ground slightly
+const posAttr = groundGeo.attributes.position;
+for (let i = 0; i < posAttr.count; i++) {
+  const x = posAttr.getX(i), z = posAttr.getZ(i);
+  posAttr.setY(i, (Math.sin(x * 0.3) * Math.cos(z * 0.3) + Math.sin(x * 0.7 + 1) * 0.5) * 0.3);
+}
+groundGeo.computeVertexNormals();
+
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Moss patches
+for (let i = 0; i < 40; i++) {
+  const r = Math.random() * 2 + 0.5;
+  const pGeo = new THREE.CircleGeometry(r, 8);
+  const pMat = new THREE.MeshStandardMaterial({ color: 0x0f3012, roughness: 1 });
+  const p = new THREE.Mesh(pGeo, pMat);
+  p.rotation.x = -Math.PI / 2;
+  p.position.set((Math.random() - 0.5) * 80, 0.01, (Math.random() - 0.5) * 80);
+  scene.add(p);
+}
+
+// ── Tree Generator ────────────────────────────────────────────
+function makeTree(x, z, scale = 1) {
+  const g = new THREE.Group();
+
+  // Trunk
+  const tH = (3 + Math.random() * 3) * scale;
+  const tGeo = new THREE.CylinderGeometry(0.15 * scale, 0.25 * scale, tH, 7);
+  const tMat = new THREE.MeshStandardMaterial({ color: 0x1a0d08, roughness: 0.9 });
+  const trunk = new THREE.Mesh(tGeo, tMat);
+  trunk.position.y = tH / 2;
+  trunk.castShadow = true;
+  g.add(trunk);
+
+  // Layered canopy
+  const layers = Math.floor(3 + Math.random() * 3);
+  const baseColor = new THREE.Color(0x0a2a0a);
+  const tipColor = new THREE.Color(0x0f4a10);
+  for (let i = 0; i < layers; i++) {
+    const t = i / (layers - 1);
+    const cR = (0.8 - t * 0.5) * scale + Math.random() * 0.3 * scale;
+    const cH = (1.5 - t * 0.3) * scale;
+    const cGeo = new THREE.ConeGeometry(cR, cH, 7 + Math.floor(Math.random() * 3));
+    const col = new THREE.Color().lerpColors(baseColor, tipColor, t);
+    col.offsetHSL(0, 0, (Math.random() - 0.5) * 0.08);
+    const cMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 });
+    const cone = new THREE.Mesh(cGeo, cMat);
+    cone.position.y = tH + i * (cH * 0.55) - cH * 0.2;
+    cone.rotation.y = Math.random() * Math.PI;
+    cone.castShadow = true;
+    g.add(cone);
+  }
+
+  g.position.set(x, 0, z);
+  g.rotation.y = Math.random() * Math.PI * 2;
+  return g;
+}
+
+// Place trees — avoid center spawn
+const trees = [];
+for (let i = 0; i < 90; i++) {
+  let x, z;
+  do {
+    x = (Math.random() - 0.5) * 90;
+    z = (Math.random() - 0.5) * 90;
+  } while (Math.sqrt(x*x + z*z) < 6);
+  const s = 0.7 + Math.random() * 0.7;
+  const t = makeTree(x, z, s);
+  scene.add(t);
+  trees.push({ x, z, r: 1.0 * s });
+}
+
+// ── Bushes ────────────────────────────────────────────────────
+for (let i = 0; i < 60; i++) {
+  const x = (Math.random() - 0.5) * 80;
+  const z = (Math.random() - 0.5) * 80;
+  const r = 0.3 + Math.random() * 0.5;
+  const bGeo = new THREE.SphereGeometry(r, 6, 5);
+  const bMat = new THREE.MeshStandardMaterial({ color: 0x0c2a0c, roughness: 1 });
+  const bush = new THREE.Mesh(bGeo, bMat);
+  bush.position.set(x, r * 0.5, z);
+  bush.scale.y = 0.6;
+  bush.castShadow = true;
+  scene.add(bush);
+}
+
+// ── Rocks ─────────────────────────────────────────────────────
+for (let i = 0; i < 30; i++) {
+  const x = (Math.random() - 0.5) * 80;
+  const z = (Math.random() - 0.5) * 80;
+  const r = 0.2 + Math.random() * 0.6;
+  const rGeo = new THREE.DodecahedronGeometry(r, 0);
+  const rMat = new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.85, metalness: 0.1 });
+  const rock = new THREE.Mesh(rGeo, rMat);
+  rock.position.set(x, r * 0.4, z);
+  rock.rotation.set(Math.random(), Math.random(), Math.random());
+  rock.castShadow = true;
+  scene.add(rock);
+}
+
+// ── Fireflies ─────────────────────────────────────────────────
+const fireflyCount = 60;
+const ffPositions = [];
+const ffGeo = new THREE.BufferGeometry();
+const ffPos = new Float32Array(fireflyCount * 3);
+const ffCol = new Float32Array(fireflyCount * 3);
+for (let i = 0; i < fireflyCount; i++) {
+  ffPositions.push({
+    x: (Math.random() - 0.5) * 80,
+    y: 1 + Math.random() * 3,
+    z: (Math.random() - 0.5) * 80,
+    speed: 0.3 + Math.random() * 0.7,
+    phase: Math.random() * Math.PI * 2,
+    orbitR: 2 + Math.random() * 3,
+    orbitSpeed: 0.3 + Math.random() * 0.5,
+    cx: (Math.random() - 0.5) * 80,
+    cz: (Math.random() - 0.5) * 80,
+  });
+  ffPos[i*3] = ffPositions[i].x;
+  ffPos[i*3+1] = ffPositions[i].y;
+  ffPos[i*3+2] = ffPositions[i].z;
+  const hue = Math.random() < 0.5 ? new THREE.Color(0x7df9ff) : new THREE.Color(0x88ff88);
+  ffCol[i*3] = hue.r; ffCol[i*3+1] = hue.g; ffCol[i*3+2] = hue.b;
+}
+ffGeo.setAttribute('position', new THREE.BufferAttribute(ffPos, 3));
+ffGeo.setAttribute('color', new THREE.BufferAttribute(ffCol, 3));
+const ffMat = new THREE.PointsMaterial({ size: 0.12, vertexColors: true, transparent: true, opacity: 0.9, sizeAttenuation: true });
+const fireflies = new THREE.Points(ffGeo, ffMat);
+scene.add(fireflies);
+
+// ── Sky stars ─────────────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(800 * 3);
+for (let i = 0; i < 800; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const r = 80 + Math.random() * 20;
+  starPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+  starPos[i*3+1] = r * Math.abs(Math.cos(phi));
+  starPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ size: 0.25, color: 0xaaccff, transparent: true, opacity: 0.7, sizeAttenuation: true });
+scene.add(new THREE.Points(starGeo, starMat));
+
+// ── Crystal Generator ─────────────────────────────────────────
+const CRYSTAL_POSITIONS = [
+  {x: -18, z: -12},
+  {x:  20, z:  8},
+  {x:  -6, z:  22},
+  {x:  14, z: -20},
+  {x: -22, z:  14},
+];
+
+const CRYSTAL_COLORS = [
+  0x7df9ff, // ice blue
+  0xff44aa, // rose
+  0xaaff44, // lime
+  0xffaa00, // amber
+  0xaa44ff, // violet
+];
+
+const crystalObjects = [];
+const crystalLights = [];
+const collected = new Array(5).fill(false);
+let score = 0;
+let gameActive = false;
+let startTime = 0;
+
+function makeCrystal(cx, cz, colorHex, index) {
+  const g = new THREE.Group();
+  g.position.set(cx, 0, cz);
+
+  const col = new THREE.Color(colorHex);
+
+  // Main shard
+  const geo = new THREE.ConeGeometry(0.35, 1.4, 6);
+  const mat = new THREE.MeshStandardMaterial({
+    color: col,
+    emissive: col,
+    emissiveIntensity: 0.6,
+    roughness: 0.05,
+    metalness: 0.3,
+    transparent: true,
+    opacity: 0.88,
+  });
+  const main = new THREE.Mesh(geo, mat);
+  main.position.y = 0.7;
+  main.castShadow = true;
+  g.add(main);
+
+  // Second shard
+  const geo2 = new THREE.ConeGeometry(0.22, 0.9, 6);
+  const s2 = new THREE.Mesh(geo2, mat);
+  s2.position.set(0.28, 0.45, 0.1);
+  s2.rotation.z = 0.4;
+  g.add(s2);
+
+  // Third shard
+  const geo3 = new THREE.ConeGeometry(0.16, 0.7, 6);
+  const s3 = new THREE.Mesh(geo3, mat);
+  s3.position.set(-0.2, 0.35, 0.15);
+  s3.rotation.z = -0.5;
+  g.add(s3);
+
+  // Glow base
+  const baseGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.05, 16);
+  const baseMat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4, transparent: true, opacity: 0.3 });
+  const base = new THREE.Mesh(baseGeo, baseMat);
+  base.position.y = 0.02;
+  g.add(base);
+
+  // Point light
+  const light = new THREE.PointLight(colorHex, 2.5, 8);
+  light.position.y = 1.2;
+  g.add(light);
+  crystalLights.push(light);
+
+  g.userData = { index, colorHex, mat };
+  scene.add(g);
+  crystalObjects.push(g);
+  return g;
+}
+
+function spawnCrystals() {
+  crystalObjects.forEach(c => scene.remove(c));
+  crystalObjects.length = 0;
+  crystalLights.length = 0;
+  CRYSTAL_POSITIONS.forEach((pos, i) => makeCrystal(pos.x, pos.z, CRYSTAL_COLORS[i], i));
+}
+
+// ── HUD Crystal Gems ──────────────────────────────────────────
+function buildCrystalHUD() {
+  const counter = document.getElementById('crystal-counter');
+  counter.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const div = document.createElement('div');
+    div.className = 'crystal-gem' + (collected[i] ? ' collected' : '');
+    div.id = `gem-${i}`;
+    div.innerHTML = `<svg viewBox="0 0 18 18" fill="none"><polygon class="gem-fill" points="9,1 16,6 13,16 5,16 2,6" fill="rgba(100,180,220,0.2)" stroke="rgba(100,180,220,0.4)" stroke-width="1" class="gem-stroke"/></svg>`;
+    counter.appendChild(div);
+  }
+}
+
+function updateGem(i) {
+  const el = document.getElementById(`gem-${i}`);
+  if (el) el.classList.add('collected');
+  document.getElementById('score-label').textContent = `${score} / 5`;
+}
+
+// ── Player Controls ───────────────────────────────────────────
+const keys = {};
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+let playerAngle = 0;
+const playerPos = new THREE.Vector3(0, 2.2, 0);
+const MOVE_SPEED = 0.07;
+const ROT_SPEED = 0.035;
+const COLLECT_DIST = 2.2;
+
+function checkCollisions(nx, nz) {
+  for (const t of trees) {
+    const dx = nx - t.x, dz = nz - t.z;
+    if (Math.sqrt(dx*dx + dz*dz) < t.r + 0.5) return true;
+  }
+  if (Math.abs(nx) > 44 || Math.abs(nz) > 44) return true;
+  return false;
+}
+
+// ── Minimap ───────────────────────────────────────────────────
+const mmCanvas = document.getElementById('minimap-canvas');
+const mmCtx = mmCanvas.getContext('2d');
+
+function drawMinimap() {
+  mmCtx.clearRect(0, 0, 100, 100);
+  mmCtx.fillStyle = 'rgba(5,10,20,0.6)';
+  mmCtx.fillRect(0,0,100,100);
+
+  const scale = 100 / 90;
+  const cx = 50, cy = 50;
+
+  // Trees
+  mmCtx.fillStyle = 'rgba(20,60,20,0.8)';
+  trees.forEach(t => {
+    const tx = cx + t.x * scale;
+    const tz = cy + t.z * scale;
+    mmCtx.beginPath();
+    mmCtx.arc(tx, tz, 1.5, 0, Math.PI*2);
+    mmCtx.fill();
+  });
+
+  // Crystals
+  crystalObjects.forEach((c, i) => {
+    if (collected[i]) return;
+    const tx = cx + c.position.x * scale;
+    const tz = cy + c.position.z * scale;
+    mmCtx.fillStyle = `#${new THREE.Color(CRYSTAL_COLORS[i]).getHexString()}`;
+    mmCtx.beginPath();
+    mmCtx.arc(tx, tz, 3, 0, Math.PI*2);
+    mmCtx.fill();
+  });
+
+  // Player
+  const px = cx + playerPos.x * scale;
+  const pz = cy + playerPos.z * scale;
+  mmCtx.fillStyle = '#ffffff';
+  mmCtx.beginPath();
+  mmCtx.arc(px, pz, 3, 0, Math.PI*2);
+  mmCtx.fill();
+
+  // Direction indicator
+  const dirX = Math.sin(playerAngle) * 6;
+  const dirZ = Math.cos(playerAngle) * 6;
+  mmCtx.strokeStyle = '#7df9ff';
+  mmCtx.lineWidth = 1.5;
+  mmCtx.beginPath();
+  mmCtx.moveTo(px, pz);
+  mmCtx.lineTo(px + dirX, pz + dirZ);
+  mmCtx.stroke();
+}
+
+// ── Flash and Message ─────────────────────────────────────────
+let flashTimeout = null;
+function triggerCollectEffect() {
+  const flash = document.getElementById('collect-flash');
+  const msg = document.getElementById('collect-msg');
+  flash.style.opacity = '1';
+  msg.style.opacity = '1';
+  clearTimeout(flashTimeout);
+  flashTimeout = setTimeout(() => {
+    flash.style.opacity = '0';
+    msg.style.opacity = '0';
+  }, 800);
+}
+
+// ── Win ───────────────────────────────────────────────────────
+function triggerWin() {
+  gameActive = false;
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  document.getElementById('win-time').textContent = `Time: ${elapsed}s`;
+  const wo = document.getElementById('win-overlay');
+  wo.style.display = 'flex';
+}
+
+// ── Proximity indicator ───────────────────────────────────────
+const proxEl = document.getElementById('proximity-indicator');
+
+// ── Game Loop ─────────────────────────────────────────────────
+const clock = new THREE.Clock();
+let t = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  t += dt;
+
+  if (gameActive) {
+    // Rotation
+    if (keys['ArrowLeft'])  playerAngle -= ROT_SPEED;
+    if (keys['ArrowRight']) playerAngle += ROT_SPEED;
+
+    // Move
+    const dx = Math.sin(playerAngle) * MOVE_SPEED;
+    const dz = Math.cos(playerAngle) * MOVE_SPEED;
+    if (keys['ArrowUp']) {
+      const nx = playerPos.x + dx, nz = playerPos.z + dz;
+      if (!checkCollisions(nx, nz)) { playerPos.x = nx; playerPos.z = nz; }
+    }
+    if (keys['ArrowDown']) {
+      const nx = playerPos.x - dx, nz = playerPos.z - dz;
+      if (!checkCollisions(nx, nz)) { playerPos.x = nx; playerPos.z = nz; }
+    }
+
+    // Camera follow
+    camera.position.copy(playerPos);
+    camera.rotation.set(0, 0, 0);
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = playerAngle + Math.PI;
+    camera.rotation.x = -0.08;
+
+    // Compass
+    document.getElementById('compass-needle').style.transform =
+      `rotate(${-(playerAngle + Math.PI) * 180 / Math.PI}deg)`;
+
+    // Crystal collection & bob
+    let nearCrystal = false;
+    crystalObjects.forEach((c, i) => {
+      if (collected[i]) return;
+      c.rotation.y = t * 0.8;
+      c.position.y = Math.sin(t * 1.5 + i) * 0.12;
+      crystalLights[i].intensity = 2.0 + Math.sin(t * 2 + i) * 0.8;
+
+      const dx2 = playerPos.x - c.position.x;
+      const dz2 = playerPos.z - c.position.z;
+      const dist = Math.sqrt(dx2*dx2 + dz2*dz2);
+
+      if (dist < 6) nearCrystal = true;
+
+      if (dist < COLLECT_DIST) {
+        collected[i] = true;
+        score++;
+        scene.remove(c);
+        updateGem(i);
+        triggerCollectEffect();
+        if (score >= 5) setTimeout(triggerWin, 600);
+      }
+    });
+    proxEl.style.opacity = nearCrystal ? '1' : '0';
+
+    // Fireflies
+    const ffp = fireflies.geometry.attributes.position.array;
+    for (let i = 0; i < fireflyCount; i++) {
+      const f = ffPositions[i];
+      ffp[i*3]   = f.cx + Math.cos(t * f.orbitSpeed + f.phase) * f.orbitR;
+      ffp[i*3+1] = f.y + Math.sin(t * f.speed + f.phase) * 0.5;
+      ffp[i*3+2] = f.cz + Math.sin(t * f.orbitSpeed + f.phase) * f.orbitR;
+    }
+    fireflies.geometry.attributes.position.needsUpdate = true;
+    ffMat.opacity = 0.5 + 0.5 * Math.sin(t * 1.2);
+
+    drawMinimap();
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ── Start / Reset ─────────────────────────────────────────────
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('win-overlay').style.display = 'none';
+  score = 0;
+  collected.fill(false);
+  playerPos.set(0, 2.2, 0);
+  playerAngle = 0;
+  gameActive = true;
+  startTime = Date.now();
+  spawnCrystals();
+  buildCrystalHUD();
+  document.getElementById('score-label').textContent = '0 / 5';
+}
+
+function resetGame() {
+  startGame();
+}
+
+// ── Resize ────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+buildCrystalHUD();
+animate();
+</script>
+</body>
+</html>
